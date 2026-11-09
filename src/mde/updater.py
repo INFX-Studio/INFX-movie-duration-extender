@@ -22,7 +22,7 @@ from pathlib import Path
 
 log = logging.getLogger(__name__)
 
-REPO = 'INFX-Studio/INFX-mov-duration-extender'
+REPO = 'INFX-Studio/INFX-movie-duration-extender'
 LATEST_RELEASE_URL = f'https://api.github.com/repos/{REPO}/releases/latest'
 USER_AGENT = 'INFX-Movie-Duration-Extender-Updater'
 CHECK_TIMEOUT = 5

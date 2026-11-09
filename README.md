@@ -10,7 +10,7 @@ ffmpeg 가 내장되어 있어 별도 설치 없이 바로 사용할 수 있습�
 
 ## 설치
 
-1. [Releases](https://github.com/INFX-Studio/INFX-mov-duration-extender/releases/latest) 에서 `INFX-Movie-Duration-Extender-<버전>-arm64.dmg` 를 내려받습니다.
+1. [Releases](https://github.com/INFX-Studio/INFX-movie-duration-extender/releases/latest) 에서 `INFX-Movie-Duration-Extender-<버전>-arm64.dmg` 를 내려받습니다.
 2. DMG 를 열고 앱을 `Applications` 폴더로 끌어다 놓습니다.
 3. 처음 실행할 때 "확인되지 않은 개발자" 경고가 나오면 **시스템 설정 → 개인정보 보호 및 보안 → 그래도 열기** 를 한 번 눌러 주세요.
    - 또는 터미널에서 다음 명령을 실행해 주세요.
