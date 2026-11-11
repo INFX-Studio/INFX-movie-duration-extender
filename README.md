@@ -121,13 +121,16 @@ pwsh scripts\build_app.ps1       # Windows
 
 ### 릴리즈
 
-1. `__version__` 을 올리고 커밋합니다.
-2. macOS 에서 `scripts/build_app.sh`, Windows 에서 `scripts\build_app.ps1` 로 각각 빌드합니다.
-3. `v<버전>` 태그로 GitHub Release 를 만들고 **DMG, zip 과 각각의 `.sha256` 파일을 함께** 업로드합니다. OS 별로 배포 파일과 `.sha256` 이 모두 있어야 해당 OS 의 자동 업데이트가 동작합니다.
+릴리즈는 항상 macOS 와 Windows 를 **같은 버전으로 함께** 냅니다. 한 OS 만 수정한 경우에도 다음 버전으로 올려 두 OS 배포 파일을 모두 다시 올립니다. 자동 업데이트가 최신 릴리즈 1개만 조회하므로, 한 OS 의 파일이 빠지면 그 OS 앱의 업데이트 확인이 오류로 끝납니다.
+
+1. `__version__` 을 다음 버전으로 올리고 커밋·푸시합니다.
+2. macOS 에서 `scripts/build_app.sh`, Windows 에서 `scriptsuild_app.ps1` 로 각각 빌드합니다.
+3. `v<버전>` 태그로 GitHub Release 를 만들고 **DMG, zip 과 각각의 `.sha256` 파일 4개를 모두** 올립니다. 4개가 모두 올라가기 전에는 릴리즈를 공개하지 않습니다(draft 로 만들어 두었다가 마지막에 공개).
 
 ```bash
-gh release create v1.0.0 dist/*.dmg dist/*.dmg.sha256 --title "INFX Movie Duration Extender 1.0.0" --notes "변경 내용"
-gh release upload v1.0.0 dist/*-win64.zip dist/*-win64.zip.sha256      # Windows 에서 빌드한 파일 추가
+gh release create v<버전> --draft --title "INFX Movie Duration Extender <버전>" --notes "변경 내용" dist/*.dmg dist/*.dmg.sha256
+gh release upload v<버전> dist/*-win64.zip dist/*-win64.zip.sha256      # 다른 OS 에서 빌드한 파일 추가
+gh release edit v<버전> --draft=false                                   # 4개 확인 후 공개
 ```
 
 ### 구조
