@@ -25,19 +25,20 @@ ffmpeg 가 내장되어 있어 별도 설치 없이 바로 사용할 수 있습�
 
 ### Windows
 
-1. [Releases](https://github.com/INFX-Studio/INFX-movie-duration-extender/releases/latest) 에서 `INFX-Movie-Duration-Extender-<버전>-win64.zip` 을 내려받습니다.
-2. 압축을 풀고 `INFX Movie Duration Extender` 폴더를 원하는 위치에 둡니다. 쓰기 권한이 있는 위치(예: 사용자 폴더)에 두어 주세요.
-3. 폴더 안의 `INFX Movie Duration Extender.exe` 를 실행합니다.
-4. "Windows의 PC 보호" 경고가 나오면 **추가 정보 → 실행** 을 눌러 주세요.
+1. [Releases](https://github.com/INFX-Studio/INFX-movie-duration-extender/releases/latest) 에서 `INFX-Movie-Duration-Extender-<버전>-win64-setup.exe` 를 내려받습니다.
+2. 설치 파일을 실행합니다. "Windows의 PC 보호" 경고가 나오면 **추가 정보 → 실행** 을 눌러 주세요.
+3. 설치가 끝나면 시작 메뉴의 **INFX Movie Duration Extender** 로 실행합니다.
 
-실행 파일은 코드 서명되어 있지 않습니다. `_internal` 폴더는 실행에 필요하므로 exe 와 함께 두어 주세요.
+- 관리자 권한 없이 현재 사용자 계정에 설치됩니다. 기본 위치는 `%LOCALAPPDATA%\Programs\INFX Movie Duration Extender` 입니다.
+- 제거는 **설정 → 앱 → 설치된 앱** 에서 할 수 있습니다.
+- 설치 파일과 실행 파일은 코드 서명되어 있지 않습니다.
 
 ## 자동 업데이트
 
 - 앱을 실행하면 GitHub Releases 의 최신 버전을 확인합니다. 새 버전이 있으면 내려받아 설치한 뒤 앱을 다시 시작합니다.
-- 다운로드한 파일(macOS 는 DMG, Windows 는 zip)은 릴리즈에 함께 올라간 `.sha256` 파일로 무결성을 확인합니다.
+- 다운로드한 파일(macOS 는 DMG, Windows 는 설치 파일)은 릴리즈에 함께 올라간 `.sha256` 파일로 무결성을 확인합니다.
 - macOS 에서는 `/Applications` 에 설치된 앱에서만 동작합니다. 다른 위치에서 실행하면 확인을 건너뜁니다.
-- Windows 에서는 exe 가 들어 있는 폴더 전체를 새 버전으로 교체합니다. 이 폴더 안에 직접 넣어 둔 파일은 업데이트할 때 삭제됩니다.
+- Windows 에서는 앱이 종료된 뒤 새 버전 설치 파일을 화면 없이 실행해 설치된 폴더에 덮어 설치합니다.
 - 네트워크에 연결되어 있지 않으면 확인을 건너뛰고 현재 버전으로 실행됩니다.
 - 서버로 전송하는 정보는 없습니다. GitHub API 조회(GET)만 수행합니다.
 
@@ -98,7 +99,7 @@ pwsh scripts\fetch_ffmpeg.ps1    # vendor\ffmpeg\ 에 ffmpeg.exe, ffprobe.exe �
 
 ### 빌드
 
-macOS 용은 macOS 에서, Windows 용은 Windows 에서 각각 빌드합니다.
+macOS 용은 macOS 에서, Windows 용은 Windows 에서 각각 빌드합니다. Windows 설치 파일 생성에는 Inno Setup 6 이 필요합니다(`winget install JRSoftware.InnoSetup`).
 
 ```bash
 scripts/build_app.sh             # macOS
@@ -114,8 +115,8 @@ pwsh scripts\build_app.ps1       # Windows
 | `dist/INFX-Movie-Duration-Extender-<버전>-arm64.dmg` | 배포용 디스크 이미지 |
 | `dist/INFX-Movie-Duration-Extender-<버전>-arm64.dmg.sha256` | 자동 업데이트용 해시 |
 | `dist/INFX Movie Duration Extender/` | Windows 실행 폴더 (exe + `_internal`) |
-| `dist/INFX-Movie-Duration-Extender-<버전>-win64.zip` | Windows 배포용 압축 파일 |
-| `dist/INFX-Movie-Duration-Extender-<버전>-win64.zip.sha256` | Windows 자동 업데이트용 해시 |
+| `dist/INFX-Movie-Duration-Extender-<버전>-win64-setup.exe` | Windows 배포용 설치 파일 |
+| `dist/INFX-Movie-Duration-Extender-<버전>-win64-setup.exe.sha256` | Windows 자동 업데이트용 해시 |
 
 버전은 `src/mde/__init__.py` 의 `__version__` 을 사용합니다.
 
@@ -125,11 +126,11 @@ pwsh scripts\build_app.ps1       # Windows
 
 1. `__version__` 을 다음 버전으로 올리고 커밋·푸시합니다.
 2. macOS 에서 `scripts/build_app.sh`, Windows 에서 `scripts\build_app.ps1` 로 각각 빌드합니다.
-3. `v<버전>` 태그로 GitHub Release 를 만들고 **DMG, zip 과 각각의 `.sha256` 파일 4개를 모두** 올립니다. 4개가 모두 올라가기 전에는 릴리즈를 공개하지 않습니다(draft 로 만들어 두었다가 마지막에 공개).
+3. `v<버전>` 태그로 GitHub Release 를 만들고 **DMG, 설치 파일(setup.exe)과 각각의 `.sha256` 파일 4개를 모두** 올립니다. 4개가 모두 올라가기 전에는 릴리즈를 공개하지 않습니다(draft 로 만들어 두었다가 마지막에 공개).
 
 ```bash
 gh release create v<버전> --draft --title "INFX Movie Duration Extender <버전>" --notes "변경 내용" dist/*.dmg dist/*.dmg.sha256
-gh release upload v<버전> dist/*-win64.zip dist/*-win64.zip.sha256      # 다른 OS 에서 빌드한 파일 추가
+gh release upload v<버전> dist/*-win64-setup.exe dist/*-win64-setup.exe.sha256   # 다른 OS 에서 빌드한 파일 추가
 gh release edit v<버전> --draft=false                                   # 4개 확인 후 공개
 ```
 
@@ -140,12 +141,13 @@ gh release edit v<버전> --draft=false                                   # 4개
 | `src/mde/core.py` | 입력 분석, 길이 계산, 시퀀스 복제, ffmpeg 실행 |
 | `src/mde/ffmpeg_cmd.py` | 출력 포맷별 인코딩 인자 |
 | `src/mde/ffmpeg_bin.py` | 내장 ffmpeg / ffprobe 경로 해석 |
-| `src/mde/updater.py` | GitHub Release 확인, 다운로드, 해시 검증, 교체 스크립트 |
+| `src/mde/updater.py` | GitHub Release 확인, 다운로드, 해시 검증, 교체·설치 스크립트 |
 | `src/mde/update_ui.py` | 시작 시 업데이트 진행 창 |
 | `src/mde/app.py` | PySide6 UI |
 | `run.py` | 실행 진입점 |
 | `mde.spec` | PyInstaller 빌드 설정 (macOS / Windows 공용) |
-| `scripts/build_app.sh`, `scripts/build_app.ps1` | 빌드와 DMG(macOS) / zip(Windows) 생성 |
+| `scripts/build_app.sh`, `scripts/build_app.ps1` | 빌드와 DMG(macOS) / 설치 파일(Windows) 생성 |
+| `installer.iss` | Windows 설치 파일 설정 (Inno Setup) |
 | `scripts/fetch_ffmpeg.sh`, `scripts/fetch_ffmpeg.ps1` | 내장 ffmpeg 다운로드 (출처·해시 고정) |
 
 ## 라이선스

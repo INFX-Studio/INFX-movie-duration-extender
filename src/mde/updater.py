@@ -4,7 +4,7 @@
 별도 헬퍼 스크립트가 앱 종료를 기다렸다가 설치된 앱을 교체하고 다시 실행합니다.
 
 - macOS: DMG 를 받아 `/Applications` 의 번들을 교체합니다. (bash)
-- Windows: zip 을 받아 실행 파일이 있는 폴더를 교체합니다. (PowerShell)
+- Windows: 설치 파일(setup.exe)을 받아 설치된 폴더에 조용히 덮어 설치합니다. (PowerShell)
 """
 
 from __future__ import annotations
@@ -33,9 +33,7 @@ DOWNLOAD_TIMEOUT = 60
 
 IS_WINDOWS = sys.platform == 'win32'
 MACOS_ASSET_SUFFIX = '.dmg'
-WINDOWS_ASSET_SUFFIX = '-win64.zip'
-# Windows zip 의 최상위 폴더 이름. (scripts/build_app.ps1 이 만드는 dist 폴더 이름과 같아야 합니다.)
-WINDOWS_ZIP_FOLDER = 'INFX Movie Duration Extender'
+WINDOWS_ASSET_SUFFIX = '-win64-setup.exe'
 
 _VERSION_RE = re.compile(r'^v?(\d+)\.(\d+)\.(\d+)$')
 _SHA256_RE = re.compile(r'\b([0-9a-fA-F]{64})\b')
@@ -143,7 +141,7 @@ def installed_app_path() -> str | None:
     """업데이트로 교체할 설치 경로를 돌려줍니다. 패키징된 앱이 아니면 None 입니다.
 
     - macOS: `/Applications` 아래에 설치된 번들로 실행 중일 때만 번들 경로.
-    - Windows: 실행 파일이 들어 있는 폴더.
+    - Windows: 실행 파일이 들어 있는 설치 폴더.
     """
     if not getattr(sys, 'frozen', False):
         return None
@@ -174,18 +172,13 @@ rm -f "$DMG"
 open "$APP"
 '''
 
-_WINDOWS_HELPER_TEMPLATE = '''# INFX Movie Duration Extender 업데이트 헬퍼. 앱이 종료되면 폴더를 교체하고 다시 실행합니다.
+_WINDOWS_HELPER_TEMPLATE = '''# INFX Movie Duration Extender 업데이트 헬퍼. 앱이 종료되면 새 버전을 조용히 설치하고 다시 실행합니다.
 $ErrorActionPreference = 'Stop'
-$Zip = {zip}
+$Setup = {setup}
 $App = {app}
-$New = "$App.new"
 Wait-Process -Id {pid} -ErrorAction SilentlyContinue
-if (Test-Path -LiteralPath $New) {{ Remove-Item -LiteralPath $New -Recurse -Force }}
-Expand-Archive -LiteralPath $Zip -DestinationPath $New
-Remove-Item -LiteralPath $App -Recurse -Force
-Move-Item -LiteralPath (Join-Path $New {folder}) -Destination $App
-Remove-Item -LiteralPath $New -Recurse -Force
-Remove-Item -LiteralPath $Zip -Force
+Start-Process -FilePath $Setup -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/DIR=`"$App`"" -Wait
+Remove-Item -LiteralPath $Setup -Force
 Start-Process -FilePath (Join-Path $App {exe})
 '''
 
@@ -203,9 +196,8 @@ def write_helper_script(pid: int, asset_path: str, app_path: str, work_dir: str)
         script = Path(work_dir) / 'update.ps1'
         text = _WINDOWS_HELPER_TEMPLATE.format(
             pid=pid,
-            zip=_ps_quote(asset_path),
+            setup=_ps_quote(asset_path),
             app=_ps_quote(app_path),
-            folder=_ps_quote(WINDOWS_ZIP_FOLDER),
             exe=_ps_quote(PureWindowsPath(sys.executable).name),
         )
         # Windows PowerShell 5.1 은 BOM 이 없으면 스크립트를 시스템 코드 페이지로 읽습니다.

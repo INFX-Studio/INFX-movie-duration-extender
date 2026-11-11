@@ -12,14 +12,14 @@ import pytest
 from mde import updater
 
 DMG = 'INFX-Movie-Duration-Extender-1.2.0-arm64.dmg'
-ZIP = 'INFX-Movie-Duration-Extender-1.2.0-win64.zip'
+SETUP = 'INFX-Movie-Duration-Extender-1.2.0-win64-setup.exe'
 RELEASE = {
     'tag_name': 'v1.2.0',
     'assets': [
         {'name': DMG, 'browser_download_url': 'https://x/app.dmg'},
         {'name': f'{DMG}.sha256', 'browser_download_url': 'https://x/app.dmg.sha256'},
-        {'name': ZIP, 'browser_download_url': 'https://x/app.zip'},
-        {'name': f'{ZIP}.sha256', 'browser_download_url': 'https://x/app.zip.sha256'},
+        {'name': SETUP, 'browser_download_url': 'https://x/setup.exe'},
+        {'name': f'{SETUP}.sha256', 'browser_download_url': 'https://x/setup.exe.sha256'},
     ],
 }
 
@@ -57,9 +57,19 @@ def test_release_info_from_json_macos(mac):
 
 def test_release_info_from_json_windows(win):
     info = updater.ReleaseInfo.from_json(RELEASE)
-    assert info.asset_name == ZIP
-    assert info.asset_url == 'https://x/app.zip'
-    assert info.sha256_url == 'https://x/app.zip.sha256'
+    assert info.asset_name == SETUP
+    assert info.asset_url == 'https://x/setup.exe'
+    assert info.sha256_url == 'https://x/setup.exe.sha256'
+
+
+def test_release_info_windows_ignores_legacy_zip(win):
+    legacy = 'INFX-Movie-Duration-Extender-1.0.2-win64.zip'
+    assets = [
+        {'name': legacy, 'browser_download_url': 'https://x/app.zip'},
+        {'name': f'{legacy}.sha256', 'browser_download_url': 'https://x/app.zip.sha256'},
+    ]
+    with pytest.raises(updater.UpdateError):
+        updater.ReleaseInfo.from_json({'tag_name': 'v1.0.2', 'assets': assets})
 
 
 def test_release_info_requires_both_assets(mac):
@@ -128,11 +138,11 @@ def test_helper_script_swaps_bundle_then_relaunches(mac, tmp_path):
     assert text.rstrip().endswith('open "$APP"')
 
 
-def test_windows_helper_script_swaps_folder_then_relaunches(win, monkeypatch, tmp_path):
+def test_windows_helper_script_runs_silent_installer_then_relaunches(win, monkeypatch, tmp_path):
     monkeypatch.setattr(updater.sys, 'executable', r"D:\It's\App\INFX Movie Duration Extender.exe")
     script = updater.write_helper_script(
         pid=1234,
-        asset_path=r'C:\Temp\update.zip',
+        asset_path=r'C:\Temp\setup.exe',
         app_path=r"D:\It's\App",
         work_dir=str(tmp_path),
     )
@@ -141,15 +151,18 @@ def test_windows_helper_script_swaps_folder_then_relaunches(win, monkeypatch, tm
     # Windows PowerShell 5.1 은 BOM 이 있어야 한글 경로를 UTF-8 로 읽습니다.
     assert raw.startswith(codecs.BOM_UTF8)
     text = raw.decode('utf-8-sig')
-    assert 'Wait-Process -Id 1234' in text
+    assert r"$Setup = 'C:\Temp\setup.exe'" in text
     assert r"$App = 'D:\It''s\App'" in text
-    assert r"$Zip = 'C:\Temp\update.zip'" in text
-    # 새 폴더를 먼저 풀어 둔 뒤 교체해야 압축 해제 실패 시 기존 앱이 남습니다.
-    assert text.index('Expand-Archive') < text.index('Remove-Item -LiteralPath $App') < text.index('Move-Item')
+    # 앱이 종료된 뒤 설치 파일을 조용히 실행하고, 설치가 끝나면 앱을 다시 실행합니다.
+    assert text.index('Wait-Process -Id 1234') < text.index('Start-Process -FilePath $Setup')
+    assert '/VERYSILENT' in text and '/SUPPRESSMSGBOXES' in text and '/NORESTART' in text
+    assert '/DIR=' in text and '-Wait' in text
+    # Expand-Archive 로 폴더를 교체하던 zip 방식은 더 이상 쓰지 않습니다.
+    assert 'Expand-Archive' not in text and 'Remove-Item -LiteralPath $App' not in text
     assert text.rstrip().endswith("Start-Process -FilePath (Join-Path $App 'INFX Movie Duration Extender.exe')")
 
 
-def test_check_for_update_uses_fetch_json(monkeypatch):
+def test_check_for_update_uses_fetch_json(mac, monkeypatch):
     monkeypatch.setattr(updater, 'fetch_json', lambda url, timeout: json.loads(json.dumps(RELEASE)))
     assert updater.check_for_update('1.0.0').tag == 'v1.2.0'
     assert updater.check_for_update('1.2.0') is None

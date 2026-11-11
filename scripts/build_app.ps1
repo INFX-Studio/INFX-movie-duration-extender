@@ -1,4 +1,5 @@
-﻿# INFX Movie Duration Extender 실행 폴더와 배포용 zip 을 만듭니다. (Windows x64 전용)
+﻿# INFX Movie Duration Extender 실행 폴더와 배포용 설치 파일(setup.exe)을 만듭니다. (Windows x64 전용)
+# 설치 파일 생성에는 Inno Setup 6 이 필요합니다. (winget install JRSoftware.InnoSetup)
 $ErrorActionPreference = 'Stop'
 
 $Root = Split-Path -Parent $PSScriptRoot
@@ -13,6 +14,13 @@ foreach ($Bin in 'ffmpeg.exe', 'ffprobe.exe') {
     }
 }
 
+# Inno Setup 은 사용자 설치(winget 기본)와 전체 사용자 설치 위치 중 있는 곳을 사용합니다.
+$Iscc = @(
+    (Join-Path $env:LOCALAPPDATA 'Programs\Inno Setup 6\ISCC.exe'),
+    (Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6\ISCC.exe')
+) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+if (-not $Iscc) { throw '[오류] Inno Setup 6 (ISCC.exe) 이 없습니다. winget install JRSoftware.InnoSetup 으로 설치해 주세요.' }
+
 $Version = & $Python -c "import sys; sys.path.insert(0, 'src'); import mde; print(mde.__version__)"
 if ($LASTEXITCODE -ne 0) { throw '[오류] 버전을 읽지 못했습니다.' }
 
@@ -22,15 +30,15 @@ foreach ($Dir in 'build', 'dist') {
 & $Python -m PyInstaller --noconfirm mde.spec
 if ($LASTEXITCODE -ne 0) { throw '[오류] PyInstaller 빌드에 실패했습니다.' }
 
-# zip 최상위에 앱 폴더가 그대로 들어갑니다. 자동 업데이트가 이 폴더 이름을 기준으로 교체합니다.
-$Zip = "dist\INFX-Movie-Duration-Extender-$Version-win64.zip"
-Compress-Archive -LiteralPath "dist\$AppName" -DestinationPath $Zip
+& $Iscc /Q "/DAppVersion=$Version" installer.iss
+if ($LASTEXITCODE -ne 0) { throw '[오류] 설치 파일 생성에 실패했습니다.' }
+$Setup = "dist\INFX-Movie-Duration-Extender-$Version-win64-setup.exe"
 
-# 자동 업데이트가 다운로드 후 검증하는 해시 파일입니다. 릴리즈에 zip 과 함께 올립니다.
-$Hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $Zip).Hash.ToLower()
-$ZipName = Split-Path -Leaf $Zip
-Set-Content -LiteralPath "$Zip.sha256" -Value "$Hash  $ZipName" -Encoding ascii
+# 자동 업데이트가 다운로드 후 검증하는 해시 파일입니다. 릴리즈에 설치 파일과 함께 올립니다.
+$Hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $Setup).Hash.ToLower()
+$SetupName = Split-Path -Leaf $Setup
+Set-Content -LiteralPath "$Setup.sha256" -Value "$Hash  $SetupName" -Encoding ascii
 
 Write-Host "[완료] dist\$AppName\$AppName.exe"
-Write-Host "[완료] $Zip"
-Write-Host "[완료] $Zip.sha256"
+Write-Host "[완료] $Setup"
+Write-Host "[완료] $Setup.sha256"
