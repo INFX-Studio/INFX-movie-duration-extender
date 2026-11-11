@@ -9,3 +9,5 @@ dist/
 # ffmpeg 바이너리는 용량이 커서 저장소에 올리지 않습니다. vendor/ffmpeg/README.md 를 참고해 주세요.
 vendor/ffmpeg/ffmpeg
 vendor/ffmpeg/ffprobe
+vendor/ffmpeg/ffmpeg.exe
+vendor/ffmpeg/ffprobe.exe

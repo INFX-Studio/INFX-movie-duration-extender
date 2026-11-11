@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import pytest
@@ -52,10 +53,11 @@ def test_normalize_output_extension():
 
 
 def test_default_output_path_video():
-    info = _video_info('/data/shot_v001.mov')
-    assert core.default_output_path(info, 10.0) == '/data/shot_v001_hold_10s.mov'
-    assert core.default_output_path(info, 2.5, '.mp4') == '/data/shot_v001_hold_2p5s.mp4'
-    assert core.default_output_path(info, 10.0, '.png') == '/data/shot_v001_hold_10s/shot_v001.%04d.png'
+    data = Path('/data')
+    info = _video_info(str(data / 'shot_v001.mov'))
+    assert core.default_output_path(info, 10.0) == str(data / 'shot_v001_hold_10s.mov')
+    assert core.default_output_path(info, 2.5, '.mp4') == str(data / 'shot_v001_hold_2p5s.mp4')
+    assert core.default_output_path(info, 10.0, '.png') == str(data / 'shot_v001_hold_10s' / 'shot_v001.%04d.png')
 
 
 def test_default_output_path_sequence(tmp_path):
@@ -117,3 +119,24 @@ def test_output_path_pattern_validation(tmp_path):
 def test_probe_video_missing_binary(tmp_path):
     with pytest.raises(MediaDurationError):
         core.probe_video(str(tmp_path / 'a.mov'), ffprobe_bin=str(tmp_path / 'no_ffprobe'))
+
+
+def test_ffmpeg_subprocess_options(monkeypatch, tmp_path):
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(kwargs)
+        return core.subprocess.CompletedProcess(cmd, 0, stdout='{}', stderr='')
+
+    monkeypatch.setattr(core.subprocess, 'run', fake_run)
+    core._run_ffmpeg(['ffmpeg'], str(tmp_path / 'out.mov'))
+    with pytest.raises(MediaDurationError):
+        core.probe_video(str(tmp_path / 'a.mov'))
+    core.warmup_ffprobe()
+
+    assert len(calls) == 3
+    # 한국어 Windows 의 기본 인코딩(cp949)으로 ffmpeg 출력을 읽지 않도록 UTF-8 을 지정합니다.
+    assert calls[0]['encoding'] == 'utf-8' and calls[1]['encoding'] == 'utf-8'
+    if sys.platform == 'win32':
+        # 창 없는 앱에서 ffmpeg 를 실행할 때 콘솔 창이 뜨지 않아야 합니다.
+        assert all(kw['creationflags'] == core.subprocess.CREATE_NO_WINDOW for kw in calls)

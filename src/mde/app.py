@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import sys
 import threading
 from dataclasses import dataclass, replace
@@ -45,7 +46,10 @@ from .update_ui import AutoUpdater
 
 APP_NAME = 'INFX Movie Duration Extender'
 APP_DESCRIPTION = 'mov, mp4, jpg/png 시퀀스를 마지막 프레임 hold로 연장하고 mov/mp4/png/jpg로 출력합니다.'
-LOG_DIR = Path.home() / 'Library' / 'Logs' / 'INFX Movie Duration Extender'
+if sys.platform == 'win32':
+    LOG_DIR = Path(os.environ['LOCALAPPDATA']) / APP_NAME / 'Logs'
+else:
+    LOG_DIR = Path.home() / 'Library' / 'Logs' / APP_NAME
 
 log = logging.getLogger('mde')
 

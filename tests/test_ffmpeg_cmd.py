@@ -75,5 +75,6 @@ def test_resolve_binaries_frozen(monkeypatch, tmp_path):
 
     monkeypatch.setattr(ffmpeg_bin.sys, 'frozen', True, raising=False)
     monkeypatch.setattr(ffmpeg_bin.sys, '_MEIPASS', str(tmp_path), raising=False)
+    monkeypatch.setattr(ffmpeg_bin, 'EXE_SUFFIX', '')
     assert ffmpeg_bin.ffmpeg_path() == str(Path(tmp_path) / 'ffmpeg' / 'ffmpeg')
     assert ffmpeg_bin.ffprobe_path() == str(Path(tmp_path) / 'ffmpeg' / 'ffprobe')

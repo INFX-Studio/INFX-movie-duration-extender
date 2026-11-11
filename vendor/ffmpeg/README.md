@@ -1,13 +1,17 @@
 # 내장 ffmpeg / ffprobe
 
-앱에 함께 포장되는 ffmpeg, ffprobe 정적 빌드(macOS Apple Silicon)가 놓이는 폴더입니다.
+앱에 함께 포장되는 ffmpeg, ffprobe 정적 빌드(macOS Apple Silicon, Windows x64)가 놓이는 폴더입니다.
 바이너리는 용량 문제로 git 에 포함하지 않으며, 아래 스크립트로 받습니다.
 
 ```bash
-scripts/fetch_ffmpeg.sh
+scripts/fetch_ffmpeg.sh              # macOS
 ```
 
-## 출처와 라이선스
+```powershell
+pwsh scripts\fetch_ffmpeg.ps1        # Windows
+```
+
+## 출처와 라이선스 (macOS)
 
 | 항목 | 내용 |
 | --- | --- |
@@ -17,12 +21,22 @@ scripts/fetch_ffmpeg.sh
 | 라이선스 | **GPL v3** (libx264, libx265 포함) |
 | 소스 코드 | FFmpeg: <https://ffmpeg.org/download.html> / 빌드 스크립트: <https://github.com/martin-riedl/ffmpeg-build-script> |
 
-다운로드 파일의 SHA-256 은 `scripts/fetch_ffmpeg.sh` 에 고정되어 있으며, 값이 다르면 스크립트가 중단됩니다.
+## 출처와 라이선스 (Windows)
+
+| 항목 | 내용 |
+| --- | --- |
+| 배포처 | <https://www.gyan.dev/ffmpeg/builds> (Gyan Doshi 빌드, `release essentials`) |
+| 다운로드 | <https://github.com/GyanD/codexffmpeg/releases> 의 `ffmpeg-9.0.2-essentials_build.zip` |
+| 버전 | 9.0.2 |
+| 라이선스 | **GPL v3** (libx264, libx265 포함) |
+| 소스 코드 | FFmpeg: <https://ffmpeg.org/download.html> |
+
+다운로드 파일의 SHA-256 은 `scripts/fetch_ffmpeg.sh`, `scripts/fetch_ffmpeg.ps1` 에 고정되어 있으며, 값이 다르면 스크립트가 중단됩니다.
 
 ## 요구 사항 (다른 빌드로 교체할 때)
 
-- 아키텍처: arm64
-- 외부 dylib 의존이 없는 정적 빌드 (Homebrew 설치본은 사용할 수 없습니다)
+- 아키텍처: macOS 는 arm64, Windows 는 x64
+- 외부 dylib / DLL 의존이 없는 정적 빌드 (Homebrew 설치본, shared 빌드는 사용할 수 없습니다)
 - 인코더: `prores_ks`, `libx264`, `png`, `mjpeg`
 - 필터: `tpad`, `scale`
 

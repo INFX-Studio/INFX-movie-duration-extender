@@ -9,6 +9,8 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+EXE_SUFFIX = '.exe' if sys.platform == 'win32' else ''
+
 
 def _binary_dir() -> Path:
     if getattr(sys, 'frozen', False):
@@ -17,8 +19,8 @@ def _binary_dir() -> Path:
 
 
 def ffmpeg_path() -> str:
-    return str(_binary_dir() / 'ffmpeg')
+    return str(_binary_dir() / f'ffmpeg{EXE_SUFFIX}')
 
 
 def ffprobe_path() -> str:
-    return str(_binary_dir() / 'ffprobe')
+    return str(_binary_dir() / f'ffprobe{EXE_SUFFIX}')

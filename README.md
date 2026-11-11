@@ -1,14 +1,16 @@
 # INFX Movie Duration Extender
 
-영상(MOV, MP4) 또는 이미지 시퀀스(PNG, JPG)의 **마지막 프레임을 유지(hold)한 채 전체 길이를 목표 시간까지 늘려 주는** macOS 앱입니다.
+영상(MOV, MP4) 또는 이미지 시퀀스(PNG, JPG)의 **마지막 프레임을 유지(hold)한 채 전체 길이를 목표 시간까지 늘려 주는** macOS / Windows 앱입니다.
 ffmpeg 가 내장되어 있어 별도 설치 없이 바로 사용할 수 있습니다.
 
-- 대상: macOS 26 이상, Apple Silicon(arm64)
+- 대상: macOS 26 이상 Apple Silicon(arm64), Windows 10 / 11 (x64)
 - 입력: `.mov`, `.mp4`, `.png` / `.jpg` 이미지 시퀀스(폴더 또는 파일 하나)
 - 출력: ProRes 422 HQ MOV, H.264 MP4, PNG 시퀀스, JPG 시퀀스
 - 라이선스: GPL v3 ([LICENSE](LICENSE))
 
 ## 설치
+
+### macOS
 
 1. [Releases](https://github.com/INFX-Studio/INFX-movie-duration-extender/releases/latest) 에서 `INFX-Movie-Duration-Extender-<버전>-arm64.dmg` 를 내려받습니다.
 2. DMG 를 열고 앱을 `Applications` 폴더로 끌어다 놓습니다.
@@ -21,11 +23,22 @@ ffmpeg 가 내장되어 있어 별도 설치 없이 바로 사용할 수 있습�
 
 앱은 Apple Developer ID 로 서명·공증되어 있지 않습니다(ad-hoc 서명). 이 경고는 첫 실행 때 한 번만 나옵니다.
 
+### Windows
+
+1. [Releases](https://github.com/INFX-Studio/INFX-movie-duration-extender/releases/latest) 에서 `INFX-Movie-Duration-Extender-<버전>-win64.zip` 을 내려받습니다.
+2. 압축을 풀고 `INFX Movie Duration Extender` 폴더를 원하는 위치에 둡니다. 쓰기 권한이 있는 위치(예: 사용자 폴더)에 두어 주세요.
+3. 폴더 안의 `INFX Movie Duration Extender.exe` 를 실행합니다.
+4. "Windows의 PC 보호" 경고가 나오면 **추가 정보 → 실행** 을 눌러 주세요.
+
+실행 파일은 코드 서명되어 있지 않습니다. `_internal` 폴더는 실행에 필요하므로 exe 와 함께 두어 주세요.
+
 ## 자동 업데이트
 
 - 앱을 실행하면 GitHub Releases 의 최신 버전을 확인합니다. 새 버전이 있으면 내려받아 설치한 뒤 앱을 다시 시작합니다.
-- 다운로드한 DMG 는 릴리즈에 함께 올라간 `.sha256` 파일로 무결성을 확인합니다.
-- `/Applications` 에 설치된 앱에서만 동작합니다. 다른 위치에서 실행하거나 네트워크에 연결되어 있지 않으면 확인을 건너뛰고 현재 버전으로 실행됩니다.
+- 다운로드한 파일(macOS 는 DMG, Windows 는 zip)은 릴리즈에 함께 올라간 `.sha256` 파일로 무결성을 확인합니다.
+- macOS 에서는 `/Applications` 에 설치된 앱에서만 동작합니다. 다른 위치에서 실행하면 확인을 건너뜁니다.
+- Windows 에서는 exe 가 들어 있는 폴더 전체를 새 버전으로 교체합니다. 이 폴더 안에 직접 넣어 둔 파일은 업데이트할 때 삭제됩니다.
+- 네트워크에 연결되어 있지 않으면 확인을 건너뛰고 현재 버전으로 실행됩니다.
 - 서버로 전송하는 정보는 없습니다. GitHub API 조회(GET)만 수행합니다.
 
 ## 사용 방법
@@ -49,9 +62,13 @@ ffmpeg 가 내장되어 있어 별도 설치 없이 바로 사용할 수 있습�
 - 같은 이름의 출력 파일이 있으면 덮어씁니다.
 - 오디오는 출력에 포함되지 않습니다.
 - MP4 출력 시 홀수 해상도는 짝수로 보정됩니다.
-- 로그: `~/Library/Logs/INFX Movie Duration Extender/app.log`
+- 로그
+  - macOS: `~/Library/Logs/INFX Movie Duration Extender/app.log`
+  - Windows: `%LOCALAPPDATA%\INFX Movie Duration Extender\Logs\app.log`
 
 ## 개발
+
+### macOS
 
 ```bash
 python3.12 -m venv .venv
@@ -65,10 +82,30 @@ scripts/fetch_ffmpeg.sh          # vendor/ffmpeg/ 에 ffmpeg, ffprobe 내려받�
 .venv/bin/ruff check .           # lint
 ```
 
+### Windows
+
+```powershell
+py -3.12 -m venv .venv
+.venv\Scripts\pip install -r requirements-dev.txt
+pwsh scripts\fetch_ffmpeg.ps1    # vendor\ffmpeg\ 에 ffmpeg.exe, ffprobe.exe 내려받기
+```
+
+```powershell
+.venv\Scripts\python run.py     # 실행
+.venv\Scripts\pytest            # 테스트 (ffmpeg 가 없으면 통합 테스트는 건너뜁니다)
+.venv\Scripts\ruff check .      # lint
+```
+
 ### 빌드
 
+macOS 용은 macOS 에서, Windows 용은 Windows 에서 각각 빌드합니다.
+
 ```bash
-scripts/build_app.sh
+scripts/build_app.sh             # macOS
+```
+
+```powershell
+pwsh scripts\build_app.ps1       # Windows
 ```
 
 | 산출물 | 내용 |
@@ -76,17 +113,21 @@ scripts/build_app.sh
 | `dist/INFX Movie Duration Extender.app` | ad-hoc 서명된 앱 번들 |
 | `dist/INFX-Movie-Duration-Extender-<버전>-arm64.dmg` | 배포용 디스크 이미지 |
 | `dist/INFX-Movie-Duration-Extender-<버전>-arm64.dmg.sha256` | 자동 업데이트용 해시 |
+| `dist/INFX Movie Duration Extender/` | Windows 실행 폴더 (exe + `_internal`) |
+| `dist/INFX-Movie-Duration-Extender-<버전>-win64.zip` | Windows 배포용 압축 파일 |
+| `dist/INFX-Movie-Duration-Extender-<버전>-win64.zip.sha256` | Windows 자동 업데이트용 해시 |
 
 버전은 `src/mde/__init__.py` 의 `__version__` 을 사용합니다.
 
 ### 릴리즈
 
 1. `__version__` 을 올리고 커밋합니다.
-2. `scripts/build_app.sh` 로 빌드합니다.
-3. `v<버전>` 태그로 GitHub Release 를 만들고 **DMG 와 `.sha256` 파일을 함께** 업로드합니다. 두 파일이 모두 있어야 자동 업데이트가 동작합니다.
+2. macOS 에서 `scripts/build_app.sh`, Windows 에서 `scripts\build_app.ps1` 로 각각 빌드합니다.
+3. `v<버전>` 태그로 GitHub Release 를 만들고 **DMG, zip 과 각각의 `.sha256` 파일을 함께** 업로드합니다. OS 별로 배포 파일과 `.sha256` 이 모두 있어야 해당 OS 의 자동 업데이트가 동작합니다.
 
 ```bash
 gh release create v1.0.0 dist/*.dmg dist/*.dmg.sha256 --title "INFX Movie Duration Extender 1.0.0" --notes "변경 내용"
+gh release upload v1.0.0 dist/*-win64.zip dist/*-win64.zip.sha256      # Windows 에서 빌드한 파일 추가
 ```
 
 ### 구조
@@ -100,8 +141,9 @@ gh release create v1.0.0 dist/*.dmg dist/*.dmg.sha256 --title "INFX Movie Durati
 | `src/mde/update_ui.py` | 시작 시 업데이트 진행 창 |
 | `src/mde/app.py` | PySide6 UI |
 | `run.py` | 실행 진입점 |
-| `mde.spec`, `scripts/build_app.sh` | PyInstaller 빌드와 DMG 생성 |
-| `scripts/fetch_ffmpeg.sh` | 내장 ffmpeg 다운로드 (출처·해시 고정) |
+| `mde.spec` | PyInstaller 빌드 설정 (macOS / Windows 공용) |
+| `scripts/build_app.sh`, `scripts/build_app.ps1` | 빌드와 DMG(macOS) / zip(Windows) 생성 |
+| `scripts/fetch_ffmpeg.sh`, `scripts/fetch_ffmpeg.ps1` | 내장 ffmpeg 다운로드 (출처·해시 고정) |
 
 ## 라이선스
 

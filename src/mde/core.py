@@ -8,6 +8,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 from collections.abc import Iterable
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -25,6 +26,8 @@ OUTPUT_SEQUENCE_EXTENSIONS = {".jpg", ".png"}
 OUTPUT_EXTENSIONS = OUTPUT_VIDEO_EXTENSIONS | OUTPUT_SEQUENCE_EXTENSIONS
 DEFAULT_SEQUENCE_FPS = 24.0
 SEQUENCE_RE = re.compile(r"^(.*?)([._])(\d+)(\.[^.]+)$", re.IGNORECASE)
+# Windows 의 창 없는 앱에서 ffmpeg 를 실행할 때 콘솔 창이 뜨지 않게 합니다.
+_SUBPROCESS_OPTIONS = {"creationflags": subprocess.CREATE_NO_WINDOW} if sys.platform == "win32" else {}
 
 
 class MediaDurationError(Exception):
@@ -216,7 +219,7 @@ def probe_video(path: str, ffprobe_bin: str | None = None) -> MediaInfo:
     ]
 
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        result = subprocess.run(cmd, capture_output=True, encoding="utf-8", check=True, **_SUBPROCESS_OPTIONS)
     except FileNotFoundError as exc:
         raise MediaDurationError(f"ffprobe 실행 파일을 찾을 수 없습니다: {ffprobe_bin}") from exc
     except subprocess.CalledProcessError as exc:
@@ -409,7 +412,7 @@ def convert_extended_sequence(
 def _run_ffmpeg(cmd: list[str], output_path: str) -> None:
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
     try:
-        subprocess.run(cmd, capture_output=True, text=True, check=True)
+        subprocess.run(cmd, capture_output=True, encoding="utf-8", check=True, **_SUBPROCESS_OPTIONS)
     except FileNotFoundError as exc:
         raise MediaDurationError(f"ffmpeg 실행 파일을 찾을 수 없습니다: {cmd[0]}") from exc
     except subprocess.CalledProcessError as exc:
@@ -539,6 +542,7 @@ def warmup_ffprobe(ffprobe_bin: str | None = None) -> None:
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             check=False,
+            **_SUBPROCESS_OPTIONS,
         )
     except OSError:
         return
