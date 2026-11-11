@@ -125,7 +125,7 @@ pwsh scripts\build_app.ps1       # Windows
 릴리즈는 항상 macOS 와 Windows 를 **같은 버전으로 함께** 냅니다. 한 OS 만 수정한 경우에도 다음 버전으로 올려 두 OS 배포 파일을 모두 다시 올립니다. 자동 업데이트가 최신 릴리즈 1개만 조회하므로, 한 OS 의 파일이 빠지면 그 OS 앱의 업데이트 확인이 오류로 끝납니다.
 
 1. `__version__` 을 다음 버전으로 올리고 커밋·푸시합니다.
-2. macOS 에서 `scripts/build_app.sh`, Windows 에서 `scripts\build_app.ps1` 로 각각 빌드합니다.
+2. macOS 에서 `scripts/build_app.sh`, Windows 에서 `scripts\build_app.ps1` 로 각각 빌드합니다. Claude Code 로 릴리즈할 때는 Windows 세션이 Remote Control 로 연결된 Mac 세션에 macOS 빌드·업로드를 맡깁니다(절차는 `CLAUDE.md` 참고).
 3. `v<버전>` 태그로 GitHub Release 를 만들고 **DMG, 설치 파일(setup.exe)과 각각의 `.sha256` 파일 4개를 모두** 올립니다. 4개가 모두 올라가기 전에는 릴리즈를 공개하지 않습니다(draft 로 만들어 두었다가 마지막에 공개).
 
 ```bash
