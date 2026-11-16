@@ -45,6 +45,33 @@ def test_extend_video_to_png_sequence(source_video, tmp_path):
     assert names[0] == 'out.0001.png'
 
 
+@pytest.mark.parametrize('ext', ['.mov', '.mp4'])
+def test_extend_video_with_resize(source_video, tmp_path, ext):
+    info = core.probe_video(source_video)
+    assert (info.width, info.height) == (321, 241)
+    output = core.extend_media(info, 2.0, str(tmp_path / f'out{ext}'), resize=core.ResizeSpec(160, 90))
+    result = core.probe_video(output)
+    assert (result.width, result.height, result.frame_count) == (160, 90, 48)
+
+
+def test_sequence_resize_same_format(source_video, tmp_path):
+    info = core.probe_video(source_video)
+    core.extend_media(info, 1.0, str(tmp_path / 'seq' / 'out.%04d.png'))
+    seq = core.analyze_sequence_file(str(tmp_path / 'seq' / 'out.0001.png'), fps=24.0)
+    assert (seq.width, seq.height) == (321, 241)
+    core.extend_media(seq, 1.5, str(tmp_path / 'small' / 'out.%04d.png'), resize=core.ResizeSpec(100, 100, 'crop'))
+    names = sorted(p.name for p in (tmp_path / 'small').iterdir())
+    assert len(names) == 36
+    assert core.probe_image_size(str(tmp_path / 'small' / names[-1])) == (100, 100)
+
+
+def test_extract_preview_frame_from_video(source_video, tmp_path):
+    info = core.probe_video(source_video)
+    for which in ('first', 'last'):
+        frame = core.extract_preview_frame(info, which, str(tmp_path))
+        assert core.probe_image_size(frame) == (321, 241)
+
+
 def test_sequence_to_mov(source_video, tmp_path):
     info = core.probe_video(source_video)
     core.extend_media(info, 1.0, str(tmp_path / 'seq' / 'out.%04d.png'))

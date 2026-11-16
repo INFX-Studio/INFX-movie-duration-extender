@@ -1,4 +1,4 @@
-"""영상/이미지 시퀀스 길이 연장 로직."""
+"""영상/이미지 시퀀스 길이 연장·사이즈 조절 로직."""
 
 from __future__ import annotations
 
@@ -26,6 +26,10 @@ OUTPUT_SEQUENCE_EXTENSIONS = {".jpg", ".png"}
 OUTPUT_EXTENSIONS = OUTPUT_VIDEO_EXTENSIONS | OUTPUT_SEQUENCE_EXTENSIONS
 DEFAULT_SEQUENCE_FPS = 24.0
 SEQUENCE_RE = re.compile(r"^(.*?)([._])(\d+)(\.[^.]+)$", re.IGNORECASE)
+FIT_PAD = "pad"
+FIT_CROP = "crop"
+FIT_STRETCH = "stretch"
+FIT_MODES = (FIT_PAD, FIT_CROP, FIT_STRETCH)
 # Windows 의 창 없는 앱에서 ffmpeg 를 실행할 때 콘솔 창이 뜨지 않게 합니다.
 _SUBPROCESS_OPTIONS = {"creationflags": subprocess.CREATE_NO_WINDOW} if sys.platform == "win32" else {}
 
@@ -47,12 +51,33 @@ class MediaInfo:
     padding: int | None = None
     sequence_pattern: str | None = None
     last_frame_path: str | None = None
+    width: int = 0
+    height: int = 0
 
     @property
     def display_type(self) -> str:
         if self.media_type == "video":
             return self.extension.lstrip(".").upper()
         return f"{self.extension.lstrip('.').upper()} SEQ"
+
+
+@dataclass(frozen=True)
+class ResizeSpec:
+    """출력 해상도와 비율이 다를 때의 맞춤 방식.
+
+    Attributes:
+        width: 출력 가로 픽셀.
+        height: 출력 세로 픽셀.
+        fit: 맞춤 방식. pad(여백), crop(크롭), stretch(늘리기) 중 하나.
+    """
+
+    width: int
+    height: int
+    fit: str = FIT_PAD
+
+    @property
+    def size_text(self) -> str:
+        return f"{self.width}x{self.height}"
 
 
 def is_supported_path(path: str) -> bool:
@@ -88,13 +113,69 @@ def validate_target(info: MediaInfo, target_seconds: float) -> int:
     return frames
 
 
+def validate_resize(resize: ResizeSpec | None, output_ext: str) -> None:
+    """리사이즈 설정이 출력 포맷에서 인코딩 가능한지 확인합니다.
+
+    Args:
+        resize: 리사이즈 설정. None 이면 원본 크기를 유지합니다.
+        output_ext: 정규화된 출력 확장자.
+
+    Raises:
+        MediaDurationError: 크기나 맞춤 방식이 잘못됐거나, 영상 출력인데 홀수 크기일 때.
+    """
+    if resize is None:
+        return
+    if resize.width <= 0 or resize.height <= 0:
+        raise MediaDurationError("출력 가로·세로는 0보다 커야 합니다.")
+    if resize.fit not in FIT_MODES:
+        raise MediaDurationError(f"지원하지 않는 맞춤 방식입니다: {resize.fit}")
+    if output_ext in OUTPUT_VIDEO_EXTENSIONS and (resize.width % 2 or resize.height % 2):
+        raise MediaDurationError("MOV·MP4 출력은 가로·세로가 짝수여야 합니다.")
+
+
+def build_resize_filter(resize: ResizeSpec) -> str:
+    """리사이즈 설정을 ffmpeg 비디오 필터 문자열로 만듭니다. 픽셀 비율은 1:1 로 맞춥니다."""
+    w, h = resize.width, resize.height
+    if resize.fit == FIT_CROP:
+        return (
+            f"scale={w}:{h}:force_original_aspect_ratio=increase:flags=lanczos,"
+            f"crop={w}:{h},setsar=1"
+        )
+    if resize.fit == FIT_STRETCH:
+        return f"scale={w}:{h}:flags=lanczos,setsar=1"
+    return (
+        f"scale={w}:{h}:force_original_aspect_ratio=decrease:flags=lanczos,"
+        f"pad={w}:{h}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1"
+    )
+
+
+def _size_filter(output_ext: str, resize: ResizeSpec | None) -> str | None:
+    """리사이즈 필터를, 리사이즈가 없으면 MP4 용 짝수 보정 필터를 돌려줍니다.
+
+    리사이즈는 validate_resize 에서 영상 출력의 짝수 크기를 강제하므로 짝수 보정을 겹쳐 쓰지 않습니다.
+    """
+    if resize is not None:
+        return build_resize_filter(resize)
+    if needs_even_scale(output_ext):
+        return EVEN_SCALE_FILTER
+    return None
+
+
 def default_output_path(
     info: MediaInfo,
     target_seconds: float,
     output_extension: str | None = None,
+    resize: ResizeSpec | None = None,
 ) -> str:
     output_ext = normalize_output_extension(output_extension or info.extension)
-    suffix = _format_seconds_for_name(target_seconds)
+    # 길이를 늘리지 않고 사이즈만 바꿀 때는 hold 표기를 빼고, 그 외에는 기존 이름 규칙을 유지합니다.
+    extended = (target_seconds * info.fps) - 0.000001 > info.frame_count
+    tags = []
+    if extended or resize is None:
+        tags.append(f"hold_{_format_seconds_for_name(target_seconds)}s")
+    if resize is not None:
+        tags.append(resize.size_text)
+    tag = "_".join(tags)
     source = Path(info.path)
     stem = source.stem
     parent = source.parent
@@ -105,10 +186,10 @@ def default_output_path(
         parent = pattern.parent
 
     if output_ext in OUTPUT_VIDEO_EXTENSIONS:
-        return str(parent / f"{stem}_hold_{suffix}s{output_ext}")
+        return str(parent / f"{stem}_{tag}{output_ext}")
 
     padding = info.padding or 4
-    out_dir = parent / f"{stem}_hold_{suffix}s"
+    out_dir = parent / f"{stem}_{tag}"
     return str(out_dir / f"{stem}.%0{padding}d{output_ext}")
 
 
@@ -210,7 +291,7 @@ def probe_video(path: str, ffprobe_bin: str | None = None) -> MediaInfo:
         "-select_streams",
         "v:0",
         "-show_entries",
-        "stream=nb_frames,r_frame_rate,avg_frame_rate,duration",
+        "stream=nb_frames,r_frame_rate,avg_frame_rate,duration,width,height",
         "-show_entries",
         "format=duration",
         "-of",
@@ -252,7 +333,81 @@ def probe_video(path: str, ffprobe_bin: str | None = None) -> MediaInfo:
         fps=fps,
         frame_count=frame_count,
         duration_seconds=duration,
+        width=_parse_int(stream.get("width")),
+        height=_parse_int(stream.get("height")),
     )
+
+
+def probe_image_size(path: str, ffprobe_bin: str | None = None) -> tuple[int, int]:
+    """이미지 한 장의 가로·세로를 ffprobe 로 읽습니다. 읽지 못하면 (0, 0) 을 돌려줍니다."""
+    cmd = [
+        str(ffprobe_bin or ffprobe_path()),
+        "-v",
+        "error",
+        "-select_streams",
+        "v:0",
+        "-show_entries",
+        "stream=width,height",
+        "-of",
+        "json",
+        path,
+    ]
+    try:
+        result = subprocess.run(cmd, capture_output=True, encoding="utf-8", check=True, **_SUBPROCESS_OPTIONS)
+        stream = (json.loads(result.stdout or "{}").get("streams") or [{}])[0]
+    except (OSError, subprocess.CalledProcessError, ValueError):
+        return 0, 0
+    return _parse_int(stream.get("width")), _parse_int(stream.get("height"))
+
+
+def extract_preview_frame(
+    info: MediaInfo,
+    which: str,
+    temp_dir: str,
+    ffmpeg_bin: str | None = None,
+) -> str:
+    """미리보기용 프레임 이미지 경로를 돌려줍니다.
+
+    시퀀스는 원본 프레임 파일을 그대로 쓰고, 영상은 ffmpeg 로 한 장을 PNG 로 뽑습니다.
+
+    Args:
+        info: 입력 정보.
+        which: "first"(첫 프레임) 또는 "last"(마지막 프레임).
+        temp_dir: 영상 프레임을 저장할 임시 폴더.
+        ffmpeg_bin: ffmpeg 실행 파일.
+
+    Raises:
+        MediaDurationError: 프레임을 뽑지 못했을 때.
+    """
+    if info.media_type == "sequence":
+        if which == "first" and info.sequence_pattern and info.start_frame is not None:
+            first = info.sequence_pattern % info.start_frame
+            if os.path.isfile(first):
+                return first
+        path = info.last_frame_path if which == "last" else info.path
+        if path and os.path.isfile(path):
+            return path
+        raise MediaDurationError("미리보기 프레임을 찾을 수 없습니다.")
+
+    ffmpeg_bin = ffmpeg_bin or ffmpeg_path()
+    key = abs(hash((info.path, which)))
+    output = str(Path(temp_dir) / f"preview_{key}_{which}.png")
+    cmd = [str(ffmpeg_bin), "-v", "error", "-y"]
+    if which == "last":
+        # 마지막 1초 앞에서부터 디코딩하며 같은 파일을 덮어써 마지막 프레임만 남깁니다.
+        cmd += ["-ss", f"{max(0.0, info.duration_seconds - 1.0):.6f}", "-i", info.path, "-update", "1"]
+    else:
+        cmd += ["-i", info.path, "-frames:v", "1"]
+    cmd.append(output)
+    try:
+        subprocess.run(cmd, capture_output=True, encoding="utf-8", check=True, **_SUBPROCESS_OPTIONS)
+    except FileNotFoundError as exc:
+        raise MediaDurationError(f"ffmpeg 실행 파일을 찾을 수 없습니다: {ffmpeg_bin}") from exc
+    except subprocess.CalledProcessError as exc:
+        raise MediaDurationError(f"미리보기 프레임 추출 실패: {exc.stderr}") from exc
+    if not os.path.isfile(output):
+        raise MediaDurationError("미리보기 프레임을 만들지 못했습니다.")
+    return output
 
 
 def analyze_sequence_file(path: str, fps: float = DEFAULT_SEQUENCE_FPS) -> MediaInfo:
@@ -288,18 +443,24 @@ def build_video_extend_command(
     target_seconds: float,
     output_path: str | None = None,
     ffmpeg_bin: str | None = None,
+    resize: ResizeSpec | None = None,
 ) -> list[str]:
     if info.media_type != "video":
         raise MediaDurationError("영상 입력만 ffmpeg 명령을 만들 수 있습니다.")
 
     validate_target(info, target_seconds)
-    output = output_path or default_output_path(info, target_seconds)
+    output = output_path or default_output_path(info, target_seconds, resize=resize)
     output_ext = normalize_output_extension(Path(output).suffix)
     _validate_output_path(output, output_ext)
+    validate_resize(resize, output_ext)
     hold_seconds = max(0.0, target_seconds - info.duration_seconds)
-    filters = [f"tpad=stop_mode=clone:stop_duration={hold_seconds:.6f}"]
-    if needs_even_scale(output_ext):
-        filters.append(EVEN_SCALE_FILTER)
+    tpad = f"tpad=stop_mode=clone:stop_duration={hold_seconds:.6f}"
+    size_filter = _size_filter(output_ext, resize)
+    if resize is not None:
+        # 원본 프레임만 리사이즈한 뒤 늘려야 복제 프레임마다 스케일을 다시 하지 않습니다.
+        filters = [size_filter, tpad]
+    else:
+        filters = [tpad] + ([size_filter] if size_filter else [])
     cmd = [
         str(ffmpeg_bin or ffmpeg_path()),
         "-y",
@@ -324,9 +485,11 @@ def extend_video(
     target_seconds: float,
     output_path: str | None = None,
     ffmpeg_bin: str | None = None,
+    resize: ResizeSpec | None = None,
 ) -> str:
-    output = output_path or default_output_path(info, target_seconds)
-    _run_ffmpeg(build_video_extend_command(info, target_seconds, output, ffmpeg_bin=ffmpeg_bin), output)
+    output = output_path or default_output_path(info, target_seconds, resize=resize)
+    cmd = build_video_extend_command(info, target_seconds, output, ffmpeg_bin=ffmpeg_bin, resize=resize)
+    _run_ffmpeg(cmd, output)
     return output
 
 
@@ -336,6 +499,7 @@ def build_sequence_convert_command(
     output_path: str,
     input_pattern: str | None = None,
     ffmpeg_bin: str | None = None,
+    resize: ResizeSpec | None = None,
 ) -> list[str]:
     if info.media_type != "sequence":
         raise MediaDurationError("시퀀스 입력만 변환 명령을 만들 수 있습니다.")
@@ -345,6 +509,7 @@ def build_sequence_convert_command(
     validate_target(info, target_seconds)
     output_ext = normalize_output_extension(Path(output_path).suffix)
     _validate_output_path(output_path, output_ext)
+    validate_resize(resize, output_ext)
     pattern = input_pattern or info.sequence_pattern
     if not pattern:
         raise MediaDurationError("시퀀스 입력 패턴을 확인할 수 없습니다.")
@@ -362,8 +527,9 @@ def build_sequence_convert_command(
         pattern,
         "-an",
     ]
-    if needs_even_scale(output_ext):
-        cmd.extend(["-vf", EVEN_SCALE_FILTER])
+    size_filter = _size_filter(output_ext, resize)
+    if size_filter:
+        cmd.extend(["-vf", size_filter])
     cmd.extend(output_encode_args(output_ext))
     cmd.extend(["-r", framerate])
     if output_ext in OUTPUT_SEQUENCE_EXTENSIONS:
@@ -378,15 +544,17 @@ def extend_media(
     output_path: str | None = None,
     output_extension: str | None = None,
     ffmpeg_bin: str | None = None,
+    resize: ResizeSpec | None = None,
 ) -> str:
-    output = output_path or default_output_path(info, target_seconds, output_extension)
+    output = output_path or default_output_path(info, target_seconds, output_extension, resize)
     output_ext = normalize_output_extension(Path(output).suffix)
     if info.media_type == "video":
-        return extend_video(info, target_seconds, output, ffmpeg_bin=ffmpeg_bin)
+        return extend_video(info, target_seconds, output, ffmpeg_bin=ffmpeg_bin, resize=resize)
 
-    if output_ext == normalize_output_extension(info.extension):
+    # 사이즈를 바꾸면 같은 포맷이어도 파일 복사가 아니라 ffmpeg 변환으로 처리합니다.
+    if output_ext == normalize_output_extension(info.extension) and resize is None:
         return extend_sequence(info, target_seconds, output)
-    return convert_extended_sequence(info, target_seconds, output, ffmpeg_bin=ffmpeg_bin)
+    return convert_extended_sequence(info, target_seconds, output, ffmpeg_bin=ffmpeg_bin, resize=resize)
 
 
 def convert_extended_sequence(
@@ -394,16 +562,18 @@ def convert_extended_sequence(
     target_seconds: float,
     output_path: str,
     ffmpeg_bin: str | None = None,
+    resize: ResizeSpec | None = None,
 ) -> str:
     output_ext = normalize_output_extension(Path(output_path).suffix)
     _validate_output_path(output_path, output_ext)
+    validate_resize(resize, output_ext)
 
     padding = info.padding or 4
     with tempfile.TemporaryDirectory(prefix="media_duration_hold_") as temp_dir:
         temp_pattern = str(Path(temp_dir) / f"hold.%0{padding}d{info.extension}")
         extend_sequence(info, target_seconds, temp_pattern)
         cmd = build_sequence_convert_command(
-            info, target_seconds, output_path, input_pattern=temp_pattern, ffmpeg_bin=ffmpeg_bin
+            info, target_seconds, output_path, input_pattern=temp_pattern, ffmpeg_bin=ffmpeg_bin, resize=resize
         )
         _run_ffmpeg(cmd, output_path)
     return output_path
@@ -460,6 +630,7 @@ def _build_sequence_info(
     start = sorted_frames[0]
     end = sorted_frames[-1]
     pattern = str(Path(folder) / f"{prefix}{sep}%0{padding}d{ext}")
+    width, height = probe_image_size(pattern % end)
     return MediaInfo(
         path=pattern,
         media_type="sequence",
@@ -472,12 +643,15 @@ def _build_sequence_info(
         padding=padding,
         sequence_pattern=pattern,
         last_frame_path=pattern % end,
+        width=width,
+        height=height,
     )
 
 
 def _build_single_image_info(path: str, fps: float) -> MediaInfo:
     p = Path(path)
     pattern = str(p.with_name(f"{p.stem}.%04d{p.suffix.lower()}"))
+    width, height = probe_image_size(path)
     return MediaInfo(
         path=path,
         media_type="sequence",
@@ -490,6 +664,8 @@ def _build_single_image_info(path: str, fps: float) -> MediaInfo:
         padding=4,
         sequence_pattern=pattern,
         last_frame_path=path,
+        width=width,
+        height=height,
     )
 
 
